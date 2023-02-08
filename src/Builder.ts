@@ -1,20 +1,29 @@
 interface ICommonBuilder<T> {
   target: T;
+  build<U>(): T;
+  build<U>(fn?: (arg: T) => U): U;
 }
 type NonFunctionPropertyNames<T> = {
   [K in keyof T]: T[K] extends Function ? never : K;
 }[keyof T];
 type NonFunctionProperties<T> = Pick<T, NonFunctionPropertyNames<T>>;
 
-type IBuilder<T> = Builder<T> & {
+type IBuilder<T extends {}> = Builder<T> & {
   [k in keyof NonFunctionProperties<T> as `set${Capitalize<string & k>}`]: (
     value: T[k] | ((setting: T[k]) => T[k])
   ) => IBuilder<T>;
 };
-export default class Builder<T> implements ICommonBuilder<T> {
+export default class Builder<T extends {}> implements ICommonBuilder<T> {
   target: T;
   constructor(initial: T) {
-    this.target = initial;
+    if (initial.constructor.name.toLowerCase() !== "object") {
+      this.target = Object.assign(
+        Object.create(Object.getPrototypeOf(initial)),
+        initial
+      );
+    } else {
+      this.target = Object.assign({}, initial);
+    }
     return this.toProxyUnit();
   }
   toProxyUnit() {
@@ -37,17 +46,13 @@ export default class Builder<T> implements ICommonBuilder<T> {
     });
     return proxy;
   }
-  build<Fn extends (arg: T) => any>(
-    callback?: Fn
-  ): ReturnType<Fn> extends any ? T : ReturnType<Fn> {
-    if (callback) return callback(this.target);
+  build<U>(): T;
+  build<U>(fn?: (arg: T) => U): U;
+  build(fn?: (arg: T) => any) {
+    if (fn) return fn(this.target);
     return this.target;
   }
-  static create<T>(initial: T) {
+  static create<T extends {}>(initial: T) {
     return new Builder(initial) as IBuilder<T>;
   }
 }
-
-const fn = <T>(arg: T) => 2;
-
-fn(2);
